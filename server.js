@@ -14,17 +14,19 @@ app.post('/api/chat', async (req, res) => {
 
     let contents = [];
 
-    // Formata o histórico antigo apenas como texto simples
+    // Formata histórico antigo
     if (history && Array.isArray(history)) {
       history.forEach(item => {
-        contents.push({
-          role: item.role === 'user' ? 'user' : 'model',
-          parts: [{ text: item.content || '' }]
-        });
+        if (item.content) {
+          contents.push({
+            role: item.role === 'user' ? 'user' : 'model',
+            parts: [{ text: item.content }]
+          });
+        }
       });
     }
 
-    // Parte atual (Texto + Imagem se houver)
+    // Parte atual
     let currentParts = [];
     if (message) {
       currentParts.push({ text: message });
@@ -42,18 +44,20 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
-    contents.push({
-      role: 'user',
-      parts: currentParts
-    });
+    if (currentParts.length > 0) {
+      contents.push({
+        role: 'user',
+        parts: currentParts
+      });
+    }
 
-    // Chamada oficial da API do Gemini
+    // Força o modelo a usar a busca e ser preciso
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
-        tools: [{ googleSearch: {} }], // Busca na web integrada
-        systemInstruction: "Você é o Etheloi, uma IA criada pelo Theo. Seja direto, amigável e ajude com tecnologia e jogos."
+        tools: [{ googleSearch: {} }], // Ativa busca real no Google
+        systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português de forma precisa, direta e amigável. REGRA CRÍTICA: Quando for perguntado sobre fatos reais, times de futebol, títulos ou notícias, pesquise sempre no Google Search antes de responder. O Avaí Futebol Clube é um time de Santa Catarina (Florianópolis) e disputa o Campeonato Catarinense."
       }
     });
 
