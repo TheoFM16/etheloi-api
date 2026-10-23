@@ -12,9 +12,31 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { message, image, history } = req.body;
 
+    // Se o usuário pedir explicitamente para criar/desenhar uma imagem
+    const lowerMsg = (message || '').toLowerCase();
+    const isImageRequest = lowerMsg.includes('crie uma imagem') || 
+                           lowerMsg.includes('gere uma imagem') || 
+                           lowerMsg.includes('desenhe') || 
+                           lowerMsg.includes('faça uma imagem') ||
+                           lowerMsg.includes('cria uma imagem');
+
+    if (isImageRequest) {
+      // Extrai a descrição pedida
+      const cleanPrompt = message
+        .replace(/(crie|gere|desenhe|faça)\s+(uma\s+)?imagem\s+(de|do|da|sobre)?/gi, '')
+        .trim();
+
+      const encodedPrompt = encodeURIComponent(cleanPrompt || "fantasy landscape");
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=600&nologo=true`;
+
+      return res.json({ 
+        reply: `Aqui está a imagem que criei para você!\n\n![Imagem Gerada](${imageUrl})` 
+      });
+    }
+
     let contents = [];
 
-    // Formata histórico antigo
+    // Formata o histórico de mensagens antigas
     if (history && Array.isArray(history)) {
       history.forEach(item => {
         if (item.content) {
@@ -26,12 +48,12 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // Parte atual
     let currentParts = [];
     if (message) {
       currentParts.push({ text: message });
     }
 
+    // Processa a imagem enviada na mensagem atual
     if (image) {
       const matches = image.match(/^data:(.+);base64,(.+)$/);
       if (matches && matches.length === 3) {
@@ -51,13 +73,14 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // Força o modelo a usar a busca e ser preciso
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
-        tools: [{ googleSearch: {} }], // Ativa busca real no Google
-        systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português de forma precisa, direta e amigável. REGRA CRÍTICA: Quando for perguntado sobre fatos reais, times de futebol, títulos ou notícias, pesquise sempre no Google Search antes de responder. O Avaí Futebol Clube é um time de Santa Catarina (Florianópolis) e disputa o Campeonato Catarinense."
+        tools: [{ googleSearch: {} }],
+        systemInstruction: `Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português de forma precisa, direta e amigável.
+REGRA DE BUSCA: Quando for perguntado sobre fatos reais, jogos, times de futebol, títulos ou notícias, pesquise sempre no Google Search antes de responder.
+REGRA DE IMAGENS: Se o usuário te enviar uma imagem anexa na mensagem atual, analisa a imagem detalhadamente e responde às perguntas sobre ela.`
       }
     });
 
