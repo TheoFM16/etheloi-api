@@ -78,3 +78,19 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
+const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: contents,
+      config: config
+    });
+
+    // Proteção para garantir que nunca envia texto vazio/em branco
+    const textoFinal = response.text || "Opa, ocorreu uma instabilidade ao enviar a resposta. Pode repetir a pergunta?";
+
+    res.json({ reply: textoFinal });
+
+  } catch (error) {
+    console.error("Erro no servidor:", error);
+    res.status(500).json({ error: error.message || "Erro interno no servidor." });
+  }
+});
