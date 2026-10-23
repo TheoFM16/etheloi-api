@@ -10,15 +10,14 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, image } = req.body;
+    const { message, image, history } = req.body;
     const lowerMsg = (message || '').toLowerCase();
 
-    // 1. INTERCEPTADOR OBRIGATÓRIO DE GERAÇÃO DE IMAGEM
+    // 1. GERADOR DE IMAGENS (Pollinations AI)
     const palavrasChave = ['cria', 'crie', 'gere', 'gerar', 'desenhe', 'faça', 'faca', 'mostre', 'foto'];
-    const querImagem = palavrasChave.some(p => lowerMsg.includes(p));
+    const querImagem = palavrasChave.some(p => lowerMsg.includes(p)) && (lowerMsg.includes('foto') || lowerMsg.includes('imagem') || lowerMsg.includes('desenho') || lowerMsg.includes('pato'));
 
     if (querImagem && !image) {
-      // Limpa os comandos para deixar só o assunto (ex: "pato")
       let promptLimpo = message
         .replace(/(cria|crie|gere|gerar|desenhe|faça|faca|mostre)\s+(uma|um)?\s*(foto|imagem|desenho)?\s*(de|do|da|sobre|pra mim|para mim)?/gi, '')
         .trim();
@@ -33,9 +32,21 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // 2. PROCESSAMENTO NORMAL DE CHAT E ANÁLISE DE IMAGEM
-    let currentParts = [];
+    // 2. CONSTRUÇÃO DO HISTÓRICO E MENSAGENS
+    let contents = [];
 
+    if (history && Array.isArray(history)) {
+      history.forEach(item => {
+        if (item.content) {
+          contents.push({
+            role: item.role === 'user' ? 'user' : 'model',
+            parts: [{ text: item.content }]
+          });
+        }
+      });
+    }
+
+    let currentParts = [];
     if (message) {
       currentParts.push({ text: message });
     }
@@ -52,21 +63,26 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
-    const config = {
-      systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português. Se houver uma imagem anexa, analisa o que está nela em detalhe."
-    };
-
-    if (!image) {
-      config.tools = [{ googleSearch: {} }];
+    if (currentParts.length > 0) {
+      contents.push({
+        role: 'user',
+        parts: currentParts
+      });
     }
+
+    // 3. CONFIGURAÇÃO SEGURA (Sem forçar ferramenta que dê conflito)
+    const config = {
+      systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português de forma direta, clara e detalhada. Se te perguntarem sobre o SCP-787, responde com base nos relatórios da Fundação SCP (avião Boeing 747-200 Safe encontrado com 515 cadáveres)."
+    };
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: currentParts }],
+      contents: contents,
       config: config
     });
 
-    res.json({ reply: response.text });
+    const textoFinal = response.text || "Opa, ocorreu uma instabilidade. Pode repetir, mestre?";
+    res.json({ reply: textoFinal });
 
   } catch (error) {
     console.error("Erro no servidor:", error);
@@ -77,20 +93,4 @@ app.post('/api/chat', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
-});
-const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contents,
-      config: config
-    });
-
-    // Proteção para garantir que nunca envia texto vazio/em branco
-    const textoFinal = response.text || "Opa, ocorreu uma instabilidade ao enviar a resposta. Pode repetir a pergunta?";
-
-    res.json({ reply: textoFinal });
-
-  } catch (error) {
-    console.error("Erro no servidor:", error);
-    res.status(500).json({ error: error.message || "Erro interno no servidor." });
-  }
 });
