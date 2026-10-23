@@ -10,20 +10,22 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, image, history } = req.body;
+    const { message, image } = req.body;
     const lowerMsg = (message || '').toLowerCase();
 
-    // 1. GERADOR DE IMAGENS (Pollinations AI)
-    const acoes = ['crie', 'cria', 'gere', 'gerar', 'desenhe', 'faça', 'faca', 'mostre', 'foto'];
-    const querCriar = acoes.some(palavra => lowerMsg.includes(palavra)) && (lowerMsg.includes('foto') || lowerMsg.includes('imagem') || lowerMsg.includes('desenho') || lowerMsg.includes('pato'));
+    // 1. INTERCEPTADOR OBRIGATÓRIO DE GERAÇÃO DE IMAGEM
+    const palavrasChave = ['cria', 'crie', 'gere', 'gerar', 'desenhe', 'faça', 'faca', 'mostre', 'foto'];
+    const querImagem = palavrasChave.some(p => lowerMsg.includes(p));
 
-    if (querCriar && !image) {
-      const cleanPrompt = message
-        .replace(/(crie|cria|gere|gerar|desenhe|faça|faca|mostre|tu consegue criar)\s+(uma|um)?\s*(foto|imagem|desenho)?\s*(de|do|da|sobre|pra mim|para mim)?/gi, '')
+    if (querImagem && !image) {
+      // Limpa os comandos para deixar só o assunto (ex: "pato")
+      let promptLimpo = message
+        .replace(/(cria|crie|gere|gerar|desenhe|faça|faca|mostre)\s+(uma|um)?\s*(foto|imagem|desenho)?\s*(de|do|da|sobre|pra mim|para mim)?/gi, '')
         .trim();
 
-      const promptFinal = cleanPrompt || message;
-      const encodedPrompt = encodeURIComponent(promptFinal);
+      if (!promptLimpo) promptLimpo = message;
+
+      const encodedPrompt = encodeURIComponent(promptLimpo);
       const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=600&nologo=true`;
 
       return res.json({ 
@@ -31,8 +33,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // 2. CONSTRUÇÃO DO CONTEÚDO
-    let contents = [];
+    // 2. PROCESSAMENTO NORMAL DE CHAT E ANÁLISE DE IMAGEM
     let currentParts = [];
 
     if (message) {
@@ -51,15 +52,8 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
-    if (currentParts.length > 0) {
-      contents.push({
-        role: 'user',
-        parts: currentParts
-      });
-    }
-
     const config = {
-      systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde em Português. Se houver uma imagem anexa, analisa-a em detalhe."
+      systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português. Se houver uma imagem anexa, analisa o que está nela em detalhe."
     };
 
     if (!image) {
@@ -68,7 +62,7 @@ app.post('/api/chat', async (req, res) => {
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: contents,
+      contents: [{ role: 'user', parts: currentParts }],
       config: config
     });
 
@@ -82,5 +76,5 @@ app.post('/api/chat', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor a rodar na porta ${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
