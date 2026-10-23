@@ -12,21 +12,22 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { message, image, history } = req.body;
 
-    // 1. GERADOR DE IMAGENS AUTOMÁTICO (Pollinations AI)
     const lowerMsg = (message || '').toLowerCase();
-    const isImageRequest = lowerMsg.includes('crie uma imagem') || 
-                           lowerMsg.includes('cria uma imagem') || 
-                           lowerMsg.includes('gere uma imagem') || 
-                           lowerMsg.includes('gerar imagem') || 
-                           lowerMsg.includes('desenhe') || 
-                           lowerMsg.includes('faça uma imagem');
 
-    if (isImageRequest) {
+    // Palavras que ativam o gerador de imagens
+    const palavrasGeração = ['imagem', 'foto', 'desenho', 'ilustração', 'desenhe', 'crie', 'cria', 'gere', 'gerar', 'faça'];
+    const querGerarImagem = palavrasGeração.some(palavra => lowerMsg.includes(palavra)) && 
+                           (lowerMsg.includes('crie') || lowerMsg.includes('cria') || lowerMsg.includes('gere') || lowerMsg.includes('desenhe') || lowerMsg.includes('faça') || lowerMsg.includes('foto') || lowerMsg.includes('imagem'));
+
+    // 1. GERADOR DE IMAGENS (Pollinations AI)
+    if (querGerarImagem && !image) {
+      // Limpa o texto para pegar só a descrição (ex: "pato com cabelo de anime")
       const cleanPrompt = message
-        .replace(/(crie|cria|gere|gerar|desenhe|faça)\s+(uma\s+)?imagem\s+(de|do|da|sobre|pra mim|para mim)?/gi, '')
+        .replace(/(crie|cria|gere|gerar|desenhe|faça|mostre)\s+(uma|um)?\s*(foto|imagem|desenho|ilustração)?\s*(de|do|da|sobre|pra mim|para mim)?/gi, '')
         .trim();
 
-      const encodedPrompt = encodeURIComponent(cleanPrompt || "anime duck");
+      const promptFinal = cleanPrompt || message;
+      const encodedPrompt = encodeURIComponent(promptFinal);
       const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=600&nologo=true`;
 
       return res.json({ 
@@ -34,7 +35,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // 2. CONSTRUÇÃO DO CONTEÚDO
+    // 2. CONSTRUÇÃO DO CONTEÚDO PARA A IA
     let contents = [];
 
     if (history && Array.isArray(history)) {
@@ -53,6 +54,7 @@ app.post('/api/chat', async (req, res) => {
       currentParts.push({ text: message });
     }
 
+    // Recebe a imagem em Base64 enviada pelo frontend
     if (image) {
       const matches = image.match(/^data:(.+);base64,(.+)$/);
       if (matches && matches.length === 3) {
@@ -72,12 +74,12 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // 3. CONFIGURAÇÃO DA IA (Evita conflito de tools com imagens)
+    // 3. CONFIGURAÇÃO DA IA
     const config = {
-      systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português de forma precisa, direta e amigável. Se houver uma imagem anexa, analisa-a e descreve-a com detalhe."
+      systemInstruction: "Tu és o Etheloi, uma IA criada pelo Theo. Responde sempre em Português de forma precisa, direta e amigável. Se houver uma imagem anexa, analisa-a com bastante detalhe e explica o que está nela."
     };
 
-    // Ativa a busca no Google APENAS quando não houver imagem anexa (evita o erro 'Tool choice is none')
+    // Ativa a busca no Google apenas se NÃO houver imagem anexa (evita conflitos de SDK)
     if (!image) {
       config.tools = [{ googleSearch: {} }];
     }
